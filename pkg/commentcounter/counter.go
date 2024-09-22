@@ -5,14 +5,17 @@ import (
 	"os"
 )
 
-type State int
+type state int
 
 const (
-	NORMAL State = iota
-	SLASH
-	SINGLE_LINE_COMMENT
-	MULTI_LINE_COMMENT
-	MULTI_LINE_TERMINATING
+	normal state = iota
+	slash
+	inline
+	block
+	blockEnding
+	stringLiteral
+	rawStringLiteral
+	characterLiteral
 )
 
 // CountComments counts the number of single-line and multi-line comments in a file
@@ -23,13 +26,16 @@ func CountComments(filename string) (int, int, error) {
 	}
 	defer file.Close()
 
-	singleLineComments := 0
-	multiLineComments := 0
-	state := NORMAL
+	inlineComments := 0
+	blockComments := 0
+	state := normal
 	scanner := bufio.NewScanner(file)
+	currentLine := 0
+	lastBlockCommentLine := -1
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		currentLine++
 		i := 0
 		lineLen := len(line)
 
@@ -38,46 +44,59 @@ func CountComments(filename string) (int, int, error) {
 			char := line[i]
 
 			switch state {
-			case NORMAL:
+			case normal:
+				// If we encounter a slash, we might be at the beginning of a comment
 				if char == '/' {
-					state = SLASH
+					state = slash
 				}
 
-			case SLASH:
+			case slash:
+				// If we encounter another slash, we are in a single-line comment
 				if char == '/' {
-					state = SINGLE_LINE_COMMENT
-					singleLineComments++
+					state = inline
+					// If we encounter an asterisk, we are in a multi-line comment
 				} else if char == '*' {
-					state = MULTI_LINE_COMMENT
-					multiLineComments++
+					state = block
+					// If we encounter anything else, we are not in a comment
 				} else {
-					state = NORMAL
+					state = normal
 				}
 
-			case SINGLE_LINE_COMMENT:
+			case inline:
 				break inner
 
-			case MULTI_LINE_COMMENT:
+			case block:
+				// If we encounter an asterisk, we might be at the end of a multi-line comment
 				if char == '*' {
-					state = MULTI_LINE_TERMINATING
-				}
-				if i == 0 {
-					multiLineComments++
+					state = blockEnding
 				}
 
-			case MULTI_LINE_TERMINATING:
+			case blockEnding:
+				// If we encounter a slash, we are at the end of a multi-line comment
+				// We still need to increment the count before going back to normal state
 				if char == '/' {
-					state = NORMAL
-				} else if char != '*' {
-					state = MULTI_LINE_COMMENT
+					state = normal
+					// Check if the block comment is on the same line before incrementing the count
+					if lastBlockCommentLine != currentLine {
+						blockComments++
+						lastBlockCommentLine = currentLine
+					}
+				} else {
+					state = block
 				}
 			}
 
 			i++
 		}
+		if state == inline {
+			inlineComments++
+		} else if state == block || state == blockEnding {
+			blockComments++
+			lastBlockCommentLine = currentLine
+		}
 
-		if state == SINGLE_LINE_COMMENT {
-			state = NORMAL
+		if state == inline {
+			state = normal
 		}
 	}
 
@@ -85,5 +104,5 @@ func CountComments(filename string) (int, int, error) {
 		return 0, 0, err
 	}
 
-	return singleLineComments, multiLineComments, nil
+	return inlineComments, blockComments, nil
 }

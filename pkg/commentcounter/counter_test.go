@@ -14,13 +14,20 @@ func TestCountComments(t *testing.T) {
 		expectedBlockCount  int
 		expectedError       error
 	}{
-		// {
-		// 	name:                "Test json_reader.cpp having only inline comments",
-		// 	filePath:            "../../testing/cpp/lib_json/json_reader.cpp",
-		// 	expectedInlineCount: 134,
-		// 	expectedBlockCount:  0,
-		// 	expectedError:       nil,
-		// },
+		{
+			name:                "Test json_reader.cpp having only inline comments",
+			filePath:            "../../testing/cpp/lib_json/test.cpp",
+			expectedInlineCount: 134,
+			expectedBlockCount:  0,
+			expectedError:       nil,
+		},
+		{
+			name:                "Test json_reader.cpp having only inline comments",
+			filePath:            "../../testing/cpp/lib_json/json_reader.cpp",
+			expectedInlineCount: 134,
+			expectedBlockCount:  0,
+			expectedError:       nil,
+		},
 		{
 			name:                "Test json_tool.h having both inline and block comments",
 			filePath:            "../../testing/cpp/lib_json/json_tool.h",
@@ -28,13 +35,13 @@ func TestCountComments(t *testing.T) {
 			expectedBlockCount:  19,
 			expectedError:       nil,
 		},
-		// {
-		// 	name:                "Test special cases",
-		// 	filePath:            "../../testing/cpp/special_cases.cpp",
-		// 	expectedInlineCount: 6,
-		// 	expectedBlockCount:  34,
-		// 	expectedError:       nil,
-		// },
+		{
+			name:                "Test special cases",
+			filePath:            "../../testing/cpp/special_cases.cpp",
+			expectedInlineCount: 6,
+			expectedBlockCount:  34,
+			expectedError:       nil,
+		},
 		{
 			name:                "Non-existent file",
 			filePath:            "../../testing/cpp/lib_json/non_existent.cpp",

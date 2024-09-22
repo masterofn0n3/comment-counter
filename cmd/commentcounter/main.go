@@ -1,7 +1,14 @@
 package main
 
-import "compass.com/go-homework/pkg/commentcounter"
+import (
+	"fmt"
+
+	"compass.com/go-homework/pkg/commentcounter"
+)
 
 func main() {
-	commentcounter.CountComments("testing/cpp/lib_json/test.cpp")
+	inline, block, _ := commentcounter.CountComments("testing/cpp/test_lib_json/main.cpp")
+	fmt.Println("Inline comments:", inline)
+	fmt.Println("Block comments:", block)
+
 }
