@@ -1,175 +1,68 @@
 package commentcounter
 
 import (
-	"bufio"
-	"os"
+	"sync"
+
+	"compass.com/go-homework/pkg/filesearch"
 )
 
-type state int
+type CountResult struct {
+	FilePath    string
+	Total       int
+	InlineCount int
+	BlockCount  int
+}
 
-const (
-	normal state = iota
-	slash
-	inline
-	block
-	blockEnding
-	stringLiteral
-	characterLiteral
+type Counter interface {
+	CountComments(filename string) (int, int, int, error)
+	GetExtensions() []string
+}
 
-	// States for raw string literals
-	preRawStringLiteral
-	confirmedRawStringLiteral
-	rawStringLiteral
-	rawStringLiteralEnding
-	preRawStringLiteralDelimiter
-	rawStringLiteralDelimiter
-	rawStringLiteralDelimiterEnding
-)
-
-// CountComments counts the number of single-line and multi-line comments in a file
-func CountComments(filename string) (int, int, error) {
-	file, err := os.Open(filename)
+// RecursiveCount counts comments in all files in a directory and its subdirectories
+func RecursiveCount(counter Counter, directoryPath string) ([]*CountResult, error) {
+	filePaths, err := filesearch.SearchFiles(directoryPath, counter.GetExtensions())
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
-	defer file.Close()
 
-	inlineComments := 0
-	inlineContinuation := false
-	blockComments := 0
-	state := normal
-	reader := bufio.NewReader(file)
-	currentLine := 0
-	lastBlockCommentLine := -1
-	var delimiter string
+	var wg sync.WaitGroup
+	results := make([]*CountResult, len(filePaths))
+	resultsChan := make(chan *CountResult, len(filePaths))
 
-	for {
-		char, _, err := reader.ReadRune()
-		charS := string(char)
-		if err != nil {
-			if err.Error() == "EOF" {
+	for i, filePath := range filePaths {
+		wg.Add(1)
+		go func(i int, filePath string) {
+			defer wg.Done()
+			total, inlineCount, blockCount, err := counter.CountComments(filePath)
+			if err != nil {
+				resultsChan <- &CountResult{
+					FilePath: filePath,
+					Total:    0,
+				}
+				return
+			}
+			resultsChan <- &CountResult{
+				FilePath:    filePath,
+				Total:       total,
+				InlineCount: inlineCount,
+				BlockCount:  blockCount,
+			}
+		}(i, filePath)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	for result := range resultsChan {
+		for i, filepath := range filePaths {
+			if filepath == result.FilePath {
+				results[i] = result
 				break
 			}
-			return 0, 0, err
-		}
-		switch state {
-		case normal:
-			// If we encounter a slash, we might be at the beginning of a comment
-			if char == '/' {
-				state = slash
-			} else if char == '"' {
-				state = stringLiteral
-			} else if char == 'R' {
-				state = preRawStringLiteral
-			}
-		case stringLiteral:
-			if char == '"' {
-				state = normal
-			}
-		case preRawStringLiteral:
-			if char == '"' {
-				state = confirmedRawStringLiteral
-			} else {
-				state = normal
-			}
-		case confirmedRawStringLiteral:
-			if char == '(' {
-				state = rawStringLiteral
-			} else {
-				state = preRawStringLiteralDelimiter
-				delimiter += charS
-			}
-		case rawStringLiteral:
-			if char == ')' {
-				state = rawStringLiteralEnding
-			}
-		case rawStringLiteralEnding:
-			if char == '"' {
-				state = normal
-			} else {
-				state = rawStringLiteral
-			}
-		case preRawStringLiteralDelimiter:
-			if char == '(' {
-				state = rawStringLiteralDelimiter
-			} else {
-				delimiter += charS
-			}
-		case rawStringLiteralDelimiter:
-			if char == ')' {
-				peeked, err := reader.Peek(len(delimiter))
-				if err != nil {
-					return 0, 0, err
-				}
-				if (string(peeked)) == delimiter {
-					state = rawStringLiteralDelimiterEnding
-					_, err := reader.Discard(len(delimiter))
-					if err != nil {
-						return 0, 0, err
-					}
-				}
-			}
-		case rawStringLiteralDelimiterEnding:
-			if char == '"' {
-				state = normal
-			} else {
-				state = rawStringLiteralDelimiter
-			}
-		case slash:
-			// If we encounter another slash, we are in a single-line comment
-			if char == '/' {
-				state = inline
-				// If we encounter an asterisk, we are in a multi-line comment
-			} else if char == '*' {
-				state = block
-				// If we encounter anything else, we are not in a comment
-			} else {
-				state = normal
-			}
-
-		case inline:
-			if char == '\\' {
-				inlineContinuation = true
-				break
-			}
-			if inlineContinuation {
-				if char == '\n' {
-					inlineComments++
-				}
-				inlineContinuation = false
-			}
-
-		case block:
-			// If we encounter an asterisk, we might be at the end of a multi-line comment
-			if char == '*' {
-				state = blockEnding
-			}
-
-		case blockEnding:
-			// If we encounter a slash, we are at the end of a multi-line comment
-			// We still need to increment the count before going back to normal state
-			if char == '/' {
-				state = normal
-				// Check if the block comment is on the same line before incrementing the count
-				if lastBlockCommentLine != currentLine {
-					blockComments++
-					lastBlockCommentLine = currentLine
-				}
-			} else {
-				state = block
-			}
-		}
-		if char == '\n' {
-			if state == inline {
-				state = normal
-				inlineComments++
-			} else if state == block || state == blockEnding {
-				blockComments++
-				lastBlockCommentLine = currentLine
-			}
-			currentLine++
 		}
 	}
 
-	return inlineComments, blockComments, nil
+	return results, nil
 }

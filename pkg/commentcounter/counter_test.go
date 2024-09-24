@@ -6,61 +6,88 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCountComments(t *testing.T) {
+type MockCounter struct {
+	Files map[string]CountResult
+	Err   error
+}
+
+func (m *MockCounter) CountComments(filename string) (int, int, int, error) {
+	if m.Err != nil {
+		return 0, 0, 0, m.Err
+	}
+	result, exists := m.Files[filename]
+	if !exists {
+		return 0, 0, 0, nil
+	}
+	return result.Total, result.InlineCount, result.BlockCount, nil
+}
+
+func (m *MockCounter) GetExtensions() []string {
+	return []string{".cpp", ".h"}
+}
+
+func TestRecursiveCount(t *testing.T) {
 	tests := []struct {
-		name                string
-		filePath            string
-		expectedInlineCount int
-		expectedBlockCount  int
-		expectedError       error
+		name        string
+		mockCounter MockCounter
+		directory   string
+		expected    []*CountResult
+		expectError bool
 	}{
 		{
-			name:                "Test json_reader.cpp having only inline comments",
-			filePath:            "../../testing/cpp/lib_json/test.cpp",
-			expectedInlineCount: 134,
-			expectedBlockCount:  0,
-			expectedError:       nil,
+			name: "Successful comment counting",
+			mockCounter: MockCounter{
+				Files: map[string]CountResult{
+					"file1.cpp": {Total: 10, InlineCount: 5, BlockCount: 5},
+					"file2.cpp": {Total: 15, InlineCount: 10, BlockCount: 5},
+				},
+			},
+			directory: "mock_directory",
+			expected: []*CountResult{
+				{FilePath: "file1.cpp", Total: 10, InlineCount: 5, BlockCount: 5},
+				{FilePath: "file2.cpp", Total: 15, InlineCount: 10, BlockCount: 5},
+			},
+			expectError: false,
 		},
 		{
-			name:                "Test json_reader.cpp having only inline comments",
-			filePath:            "../../testing/cpp/lib_json/json_reader.cpp",
-			expectedInlineCount: 134,
-			expectedBlockCount:  0,
-			expectedError:       nil,
+			name: "File not found",
+			mockCounter: MockCounter{
+				Files: map[string]CountResult{},
+			},
+			directory: "mock_directory",
+			expected: []*CountResult{
+				{FilePath: "file1.cpp", Total: 0},
+				{FilePath: "file2.cpp", Total: 0},
+			},
+			expectError: false,
 		},
 		{
-			name:                "Test json_tool.h having both inline and block comments",
-			filePath:            "../../testing/cpp/lib_json/json_tool.h",
-			expectedInlineCount: 13,
-			expectedBlockCount:  19,
-			expectedError:       nil,
-		},
-		{
-			name:                "Test special cases",
-			filePath:            "../../testing/cpp/special_cases.cpp",
-			expectedInlineCount: 6,
-			expectedBlockCount:  34,
-			expectedError:       nil,
-		},
-		{
-			name:                "Non-existent file",
-			filePath:            "../../testing/cpp/lib_json/non_existent.cpp",
-			expectedInlineCount: 0,
-			expectedBlockCount:  0,
-			expectedError:       assert.AnError,
+			name: "Error while counting comments",
+			mockCounter: MockCounter{
+				Err: assert.AnError, // Simulate an error
+			},
+			directory: "mock_directory",
+			expected: []*CountResult{
+				{FilePath: "file1.cpp", Total: 0},
+				{FilePath: "file2.cpp", Total: 0},
+			},
+			expectError: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inlineCount, blockCount, err := CountComments(tt.filePath)
-			if tt.expectedError != nil {
+			// filePaths := []string{"file1.cpp", "file2.cpp"}
+
+			results, err := RecursiveCount(&tt.mockCounter, tt.directory)
+
+			if tt.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 			}
-			assert.Equal(t, tt.expectedInlineCount, inlineCount, "wrong inline comment count")
-			assert.Equal(t, tt.expectedBlockCount, blockCount, "wrong block comment count")
+
+			assert.Equal(t, tt.expected, results)
 		})
 	}
 }
