@@ -44,10 +44,10 @@ const (
 )
 
 // CountComments counts the number of total line, single-line and multi-line comments in a file
-func (cppComCounter *CppCommentCounter) CountComments(filename string) (int, int, int, error) {
+func (cppComCounter *CppCommentCounter) CountComments(filename string) (*CountResult, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return 0, 0, 0, err
+		return &CountResult{FilePath: filename, Total: 0, InlineCount: 0, BlockCount: 0}, err
 	}
 	defer file.Close()
 
@@ -67,7 +67,7 @@ func (cppComCounter *CppCommentCounter) CountComments(filename string) (int, int
 			if err.Error() == "EOF" {
 				break
 			}
-			return 0, 0, 0, err
+			return &CountResult{FilePath: filename, Total: 0, InlineCount: 0, BlockCount: 0}, err
 		}
 		switch state {
 		case normal:
@@ -84,7 +84,7 @@ func (cppComCounter *CppCommentCounter) CountComments(filename string) (int, int
 			if char == '\\' {
 				nextChar, _, err := reader.ReadRune()
 				if err != nil {
-					return 0, 0, 0, err
+					return &CountResult{FilePath: filename, Total: 0, InlineCount: 0, BlockCount: 0}, err
 				}
 				if nextChar == '\'' || nextChar == '\\' {
 					continue
@@ -98,7 +98,7 @@ func (cppComCounter *CppCommentCounter) CountComments(filename string) (int, int
 			if char == '\\' {
 				nextChar, _, err := reader.ReadRune()
 				if err != nil {
-					return 0, 0, 0, err
+					return &CountResult{FilePath: filename, Total: 0, InlineCount: 0, BlockCount: 0}, err
 				}
 				if nextChar == '"' || nextChar == '\\' {
 					continue
@@ -141,14 +141,14 @@ func (cppComCounter *CppCommentCounter) CountComments(filename string) (int, int
 			if char == ')' {
 				peeked, err := reader.Peek(len(delimiter))
 				if err != nil {
-					return 0, 0, 0, err
+					return &CountResult{FilePath: filename, Total: 0, InlineCount: 0, BlockCount: 0}, err
 				}
 				// Peeked ahead to see if the delimiter is coming up
 				if (string(peeked)) == delimiter {
 					state = rawStringLiteralDelimiterEnding
 					_, err := reader.Discard(len(delimiter))
 					if err != nil {
-						return 0, 0, 0, err
+						return &CountResult{FilePath: filename, Total: 0, InlineCount: 0, BlockCount: 0}, err
 					}
 				}
 			}
@@ -210,7 +210,7 @@ func (cppComCounter *CppCommentCounter) CountComments(filename string) (int, int
 		}
 	}
 
-	return currentLine, inlineComments, blockComments, nil
+	return &CountResult{FilePath: filename, Total: currentLine, InlineCount: inlineComments, BlockCount: blockComments}, nil
 }
 
 func (cppComCounter *CppCommentCounter) GetExtensions() []string {

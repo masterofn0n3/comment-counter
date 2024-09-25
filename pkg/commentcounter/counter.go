@@ -1,6 +1,7 @@
 package commentcounter
 
 import (
+	"fmt"
 	"sync"
 
 	"compass.com/go-homework/pkg/filesearch"
@@ -14,8 +15,17 @@ type CountResult struct {
 }
 
 type Counter interface {
-	CountComments(filename string) (int, int, int, error)
+	CountComments(filename string) (*CountResult, error)
 	GetExtensions() []string
+}
+
+type FileProcessingError struct {
+	FilePath string
+	Err      error
+}
+
+func (e *FileProcessingError) Error() string {
+	return fmt.Sprintf("error processing file %s: %v", e.FilePath, e.Err)
 }
 
 // RecursiveCount counts comments in all files in a directory and its subdirectories
@@ -28,25 +38,18 @@ func RecursiveCount(counter Counter, directoryPath string) ([]*CountResult, erro
 	var wg sync.WaitGroup
 	results := make([]*CountResult, len(filePaths))
 	resultsChan := make(chan *CountResult, len(filePaths))
+	errChan := make(chan error, 1)
 
 	for i, filePath := range filePaths {
 		wg.Add(1)
 		go func(i int, filePath string) {
 			defer wg.Done()
-			total, inlineCount, blockCount, err := counter.CountComments(filePath)
+			countResult, err := counter.CountComments(filePath)
 			if err != nil {
-				resultsChan <- &CountResult{
-					FilePath: filePath,
-					Total:    0,
-				}
+				errChan <- &FileProcessingError{FilePath: filePath, Err: err}
 				return
 			}
-			resultsChan <- &CountResult{
-				FilePath:    filePath,
-				Total:       total,
-				InlineCount: inlineCount,
-				BlockCount:  blockCount,
-			}
+			resultsChan <- countResult
 		}(i, filePath)
 	}
 
@@ -55,11 +58,16 @@ func RecursiveCount(counter Counter, directoryPath string) ([]*CountResult, erro
 		close(resultsChan)
 	}()
 
-	for result := range resultsChan {
-		for i, filepath := range filePaths {
-			if filepath == result.FilePath {
-				results[i] = result
-				break
+	for i := 0; i < len(filePaths); i++ {
+		select {
+		case err := <-errChan:
+			return nil, err
+		case result := <-resultsChan:
+			for i, filepath := range filePaths {
+				if filepath == result.FilePath {
+					results[i] = result
+					break
+				}
 			}
 		}
 	}

@@ -1,15 +1,25 @@
 package main
 
-import "compass.com/go-homework/pkg/commentcounter"
+import (
+	"fmt"
+
+	"compass.com/go-homework/internal/utils"
+	"compass.com/go-homework/pkg/commentcounter"
+)
 
 func main() {
-	cppCommentCounter := commentcounter.NewCppCommentCounter()
-	result, err := commentcounter.RecursiveCount(cppCommentCounter, "testing/cpp")
+	dirPath, err := utils.ParseArgs()
 	if err != nil {
-		println(err)
+		fmt.Println(err)
 		return
 	}
-	for _, res := range result {
-		println(res.FilePath, res.Total, res.InlineCount, res.BlockCount)
+
+	cppCommentCounter := commentcounter.NewCppCommentCounter()
+	results, err := commentcounter.RecursiveCount(cppCommentCounter, dirPath)
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
+
+	utils.PrintResults(results)
 }

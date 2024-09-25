@@ -14,7 +14,7 @@ var (
 )
 
 // SearchFiles recursive searches for files with the specified extensions in the given directory and returns a sorted list of file paths.
-func SearchFiles(root string, extensions []string) ([]string, error) {
+var SearchFiles = func(root string, extensions []string) ([]string, error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return nil, ErrDirectoryNotExist
 	}

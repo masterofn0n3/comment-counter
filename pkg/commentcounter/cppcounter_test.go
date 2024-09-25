@@ -100,15 +100,15 @@ func TestCountComments(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cppCounter := &CppCommentCounter{}
-			totalLines, inlineCount, blockCount, err := cppCounter.CountComments(tt.filePath)
+			countResult, err := cppCounter.CountComments(tt.filePath)
 			if tt.expectedError != nil {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 			}
-			assert.Equal(t, tt.expectedTotalLines, totalLines, "wrong total lines")
-			assert.Equal(t, tt.expectedInlineCount, inlineCount, "wrong inline comment count")
-			assert.Equal(t, tt.expectedBlockCount, blockCount, "wrong block comment count")
+			assert.Equal(t, tt.expectedTotalLines, countResult.Total, "wrong total lines")
+			assert.Equal(t, tt.expectedInlineCount, countResult.InlineCount, "wrong inline comment count")
+			assert.Equal(t, tt.expectedBlockCount, countResult.BlockCount, "wrong block comment count")
 		})
 	}
 }
